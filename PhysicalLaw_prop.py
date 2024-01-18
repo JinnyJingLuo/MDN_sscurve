@@ -94,6 +94,14 @@ def sigma_plastic(material_type, eps, schimd_factor_grain, gs, alp, bet, strainr
                              scaler_ShearModulus = scaler_ShearModulus, scaler_LatticeConstant = scaler_LatticeConst,\
                              scaler_PossionRatio = scaler_PoissonRatio)
 
+    df_test = df_test.astype('float32')
+
+    X = torch.from_numpy(df_test.values)
+    x_test_variable = Variable(X)
+    pi_den, sigma_den, mean_den = model(x_test_variable)
+    
+    mean_stress, dev_stress, mean_den, dev_den = distribution_stress(pi_den,sigma_den,mean_den,gs,b,alp,bet,mu, scaler_density)
+
 
     sigma_ep = np.array(mean_stress).reshape(len(gs),1) /SFactor.reshape(len(gs),1)
     sigma_ep_upper = np.array(np.array(mean_stress) + 3* np.array( dev_stress)).reshape(len(gs),1) /SFactor.reshape(len(gs),1)
