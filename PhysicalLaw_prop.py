@@ -5,8 +5,9 @@ import torch
 
 from torch.autograd import Variable
 
-import ML_modulus
+import ML_modulus_prop
 import NumericalMthod
+
 
 def initial_dislocation_density(tau0,alp,mu,b,gs,bet):
     """
@@ -87,9 +88,9 @@ def sigma_plastic(material_type, eps, schimd_factor_grain, gs, alp, bet, strainr
     PoissonRatio = materials["PoissonRatio"]*  np.ones_like(gs)
     strains = eps*np.ones_like(gs) 
     strainrates = strainrate*np.ones_like(gs)
-    df_test = construct_input(gs,strains,strainrates,ShearModulus,LatticeConst,PoissonRatio,yieldpoints)
+    df_test = ML_modulus_prop.construct_input(gs,strains,strainrates,ShearModulus,LatticeConst,PoissonRatio,yieldpoints)
     #(GS,strains,strainrates,ShearModulus,LatticeConstant,PossionRatio,Yieldpoint):
-    df_test = normalizeInput(df=df_test,transformer_strain=transformer_strain, transformer_gs=transformer_gs,\
+    df_test = ML_modulus_prop.normalizeInput(df=df_test,transformer_strain=transformer_strain, transformer_gs=transformer_gs,\
                              transformer_strainrate=transformer_strainrate, scaler_YP=scaler_YP,\
                              scaler_ShearModulus = scaler_ShearModulus, scaler_LatticeConstant = scaler_LatticeConst,\
                              scaler_PossionRatio = scaler_PoissonRatio)
@@ -98,7 +99,7 @@ def sigma_plastic(material_type, eps, schimd_factor_grain, gs, alp, bet, strainr
 
     X = torch.from_numpy(df_test.values)
     x_test_variable = Variable(X)
-    pi_den, sigma_den, mean_den = model(x_test_variable)
+    pi_den, sigma_den, mean_den = trained_model(x_test_variable)
     
     mean_stress, dev_stress, mean_den, dev_den = distribution_stress(pi_den,sigma_den,mean_den,gs,b,alp,bet,mu, scaler_density)
 
@@ -140,7 +141,6 @@ def solve_strain(prediction_type, material_type, Schimd_factor, gs, alp, bet, st
     float: plastic stress and predicted density 
     """
     mu = materials["ShearModulus"]*1e9
-    b = np.array(materials['LatticeConst'])/np.sqrt(2)*1e-10
     E_modulus = 2*mu*(1+materials["PoissonRatio"])
     def stress(eps):
         #  strainrate,possion_ratio, LatticeConst,Yieldpoints, StackingFaultE, trained_model,  AtomicVolume, transformer_strain, transformer_gs, transformer_strainrate, scaler_LC, scaler_PR, scaler_SF, scaler_SM, scaler_V, scaler_YP, scaler_density
@@ -148,16 +148,14 @@ def solve_strain(prediction_type, material_type, Schimd_factor, gs, alp, bet, st
         = sigma_plastic(material_type, eps, Schimd_factor, gs, alp, bet, strainrate, materials, rho0, trained_model, \
                         transformer_strain, transformer_gs, transformer_strainrate,scaler_density,scaler_YP,\
                        scaler_ShearModulus, scaler_LatticeConst ,scaler_PoissonRatio)
-        s_grain_e = sigma_elastic(eps * np.ones_like(rho_dis), rho0,E_modulus)[0]
+        s_grain_e = sigma_elastic(eps * np.ones_like(gs), rho0,E_modulus)[0]
         if prediction_type == "average":
                 s_grain_p = s_grain_average
-                density = ave_density
         if prediction_type == "upper":
                 s_grain_p = s_grain_p_upper
-                density = upper_density
         if prediction_type == "lower":
                 s_grain_p = s_grain_p_lower
-                density = lower_density
+               
      
         s_grain =  np.where((s_grain_e.reshape(np.shape(s_grain_e)) > s_grain_p.reshape(np.shape(s_grain_e))), s_grain_p.reshape(np.shape(s_grain_e)), s_grain_e.reshape(np.shape(s_grain_e)))
         # eps_p = eps - s_grain/np.max(Schimd_factor, axis=1).reshape(rho0.shape)/E_modulus
@@ -169,46 +167,12 @@ def solve_strain(prediction_type, material_type, Schimd_factor, gs, alp, bet, st
         return s0-sigma_z
 
    
-    eps_sss,_ = bisect_root(stress,0.0, 0.2, 5000,sigma_z)
+    eps_sss,_ = NumericalMthod.bisect_root(stress,0.0, 0.2, 5000,sigma_z)
    
     
     return eps_sss
 
-    # get material properties
-    mu = materials["ShearModulus"]*1e9
-    b = np.array(materials['LatticeConst'])/np.sqrt(2)*1e-10
-    E_modulus = 2*mu*(1+materials["PoissonRatio"])
-
-    # define a one-variable function that output the stress given a strain
-    def stress(eps):
-        #plastic stress
-        [s_grain_average, ave_density, s_grain_p_upper,upper_density, s_grain_p_lower,lower_density]= sigma_plastic(material_type, eps, Schimd_factor, gs, alp, bet, strainrate, materials, rho0, trained_model,  transformer_strain, transformer_gs, transformer_strainrate,scaler_density,scaler_YP)
-        #elastic stress
-        s_grain_e = sigma_elastic(eps * np.ones_like(rho0), rho0,E_modulus)[0]
-        if prediction_type == "average":
-                s_grain_p = s_grain_average
-                density = ave_density
-        if prediction_type == "upper":
-                s_grain_p = s_grain_p_upper
-                density = upper_density
-        if prediction_type == "lower":
-                s_grain_p = s_grain_p_lower
-                density = lower_density
-        # a grain prefer to choose the lower stress value
-        s_grain =  np.where((s_grain_e.reshape(np.shape(s_grain_e)) > s_grain_p.reshape(np.shape(s_grain_e))), s_grain_p.reshape(np.shape(s_grain_e)), s_grain_e.reshape(np.shape(s_grain_e)))
-        # final stress is the weight of these grains 
-        s0 = np.sum(s_grain * weight) 
-        return s0
-    # define a one-variable function where 0 point is the solution
-    def stress_equation(eps):
-        s0 = stress(eps)
-        return s0-sigma_z
-
-    # find the solution through bisection method 
-    eps_sss,_ = NumericalMthod.bisect_root(stress,0.0, 0.2, 5000,sigma_z)
-
-    return eps_sss
-
+    
 
 def density_to_stress(dislocation_den,alp,mu,b,gs,bet):
     """

@@ -10,18 +10,20 @@ import microstructure
 
 import torch
 import matplotlib.pyplot as plt
-from scipy.optimize import fsolve
 
-import pandas as pd
+
+
 from spyder_kernels.utils.iofuncs import load_dictionary
-import scipy
+
 import csv
 
 import pickle
 import random
 from torch import nn
-from torch.autograd import Variable
+
 import torch.nn.functional as F
+
+import PhysicalLaw_prop
 # Define constants
 
 
@@ -66,7 +68,7 @@ class MDN(nn.Module):
 model learning
 '''
 
-filename = '../finalized_MDN_prop.sav'
+filename = './finalized_MDN_prop.sav'
 with open(filename,'rb') as f:
     model, transformer_strain, transformer_gs, transformer_strainrate,  scaler_density,scaler_YP,scaler_ShearModulus, scaler_LatticeConst ,scaler_PoissonRatio = pickle.load(f)
 bet_rho =1.76e-3
@@ -152,11 +154,11 @@ for data_exp in data_exps[0:1]:
                     bet_section = bet_detail[section-1]    
                     sigma_z = stress[step-1]
                     
-                    eps_sss_average= solve_strain("average", material_type, Schimd_factor, gs, alp_section, bet_section,strain_rate, materials, rho_dis, model, transformer_strain, \
+                    eps_sss_average= PhysicalLaw_prop.solve_strain("average", material_type, Schimd_factor, gs, alp_section, bet_section,strain_rate, materials, rho_dis, model, transformer_strain, \
                         transformer_gs, transformer_strainrate,  scaler_density,scaler_YP, weight, sigma_z,scaler_ShearModulus, scaler_LatticeConst ,scaler_PoissonRatio)
-                    eps_sss_upper = solve_strain("upper", material_type, Schimd_factor, gs, alp_section, bet_section,strain_rate, materials, rho_dis, model, transformer_strain, \
+                    eps_sss_upper = PhysicalLaw_prop.solve_strain("upper", material_type, Schimd_factor, gs, alp_section, bet_section,strain_rate, materials, rho_dis, model, transformer_strain, \
                          transformer_gs, transformer_strainrate, scaler_density,scaler_YP, weight, sigma_z,scaler_ShearModulus, scaler_LatticeConst ,scaler_PoissonRatio)
-                    eps_sss_lower = solve_strain("lower", material_type, Schimd_factor, gs, alp_section, bet_section,strain_rate, materials, rho_dis, model, transformer_strain, \
+                    eps_sss_lower = PhysicalLaw_prop.solve_strain("lower", material_type, Schimd_factor, gs, alp_section, bet_section,strain_rate, materials, rho_dis, model, transformer_strain, \
                          transformer_gs, transformer_strainrate, scaler_density, scaler_YP,weight, sigma_z,scaler_ShearModulus, scaler_LatticeConst ,scaler_PoissonRatio)
     
                     # solve_strain(Schimd_factor, gs, alp, bet, strainrate, materials, rho0, trained_model,  transformer_strain, transformer_gs, transformer_strainrate, scaler_LC, scaler_PR, scaler_SF, scaler_SM, scaler_V, scaler_YP, scaler_density, rho_dis, weight, sigma_z):
