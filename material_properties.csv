@@ -1,0 +1,4 @@
+Material,ShearModulus,PoissonRatio,LatticeConst,AtomicVolume,StackingFaultE
+Cu,48,0.34,3.597,7.1,90
+Al,26,0.35,4.046,10,250
+Ni,76,0.31,3.499,6.59,200
