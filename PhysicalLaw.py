@@ -198,6 +198,15 @@ def density_to_stress(dislocation_den,alp,mu,b,gs,bet):
     tau = mu *(alp.reshape(alp.shape)*b*np.sqrt(dislocation_den).reshape(alp.shape) + bet.reshape(alp.shape)/gs.reshape(alp.shape)/np.sqrt(dislocation_den).reshape(alp.shape))
     return tau
 
+def sample_from_mdn(means, std_devs, mix_coeffs, num_samples=1):
+    # Choose components for each sample
+    components = np.random.choice(len(mix_coeffs), size=num_samples, p=mix_coeffs)
+
+    # Generate samples for each component
+    samples = np.random.normal(means[components], std_devs[components])
+
+    return samples
+        
 def distribution_stress(pi_variable,sigma_variable,mu_variable,gs_list,b_v,alp_list,bet_list,shear_modulus,scaler_density):# unit is shear modulus
     '''
     Distribution of  stress 
@@ -214,29 +223,27 @@ def distribution_stress(pi_variable,sigma_variable,mu_variable,gs_list,b_v,alp_l
     sigma_data = sigma_variable.data.numpy()
     mu_data = mu_variable.data.numpy()
     
-    # calculate the mean and variance for dislocation density with inverse_transform 
-    # However, for density, we firstly re-scale to [ln\rho_min,ln_\rho_max]. It means \bar\rho = (\ln\rho - S0)/L so we can easily know, if the variance is sigma and the mean is mu for non-dimensional output
-    # the dimensional output for one bound is upper_bar =  L(mu + sigma) + S0
-    # the dimensional output for mean is mu_list =  L(mu) + S0,
-    # therefore, L * sigma = upper_bar -  mu_list， which is the variance after re-scaling
+    # calculate the mean and variance for dislocation density with inverse_transform
+    # CAUTION: IT SHOULD BE NOTICED THAT MDN IS THE SUMMATION OF DISTRIBUTION FUNCTION, NOT THE SUMMATION OF VARIABLES THAT SATISFY DIFFERENT DISTRIBUTION!!!
 
     mean_stress = []
     dev_stress = []
     mean_den = []
     dev_den = []
+    
     for n in range(len(gs_list)):
+        
         alp = alp_list[n]
         bet = bet_list[n]
         gs = gs_list[n]
-        n_samples = 10000  # Number of samples
-        normalized_logrho = np.zeros(n_samples)
-        for k in range(len(pi_data[0])): # how  many different distribution
-            mu = mu_data[n][k]
-            sigma = sigma_data[n][k]
-            pi = pi_data[n][k]
-            normalized_logrho += pi * np.random.normal(mu, sigma, n_samples)
-            
-          
+        n_samples = 1000  # Number of samples
+        
+        # for k in range(len(pi_data[0])): # how  many different distribution
+        mu = mu_data[n]
+        sigma = sigma_data[n]
+        pi = pi_data[n]
+        
+        normalized_logrho = sample_from_mdn(mu, sigma, pi, n_samples)
         logden_samples = scaler_density.inverse_transform(normalized_logrho.reshape(-1,1))
         den_samples = np.exp(logden_samples)
         # get statistical value fpr stress
