@@ -33,7 +33,7 @@ randseed = 1995
 np.random.seed(randseed)
 random.seed(randseed)
 torch.manual_seed(randseed)
-TaylorFactor = 2.2 # why I use Taylor factor 2.2 instead of 2.7: the average value from mtex gives taylor factor 2.2 
+AveSchmidFactor = 2.2
 oneDivSqrtTwoPI = 1.0 / np.sqrt(2.0*np.pi) # normalization factor for Gaussians
 path = '../samplesize97_withObserve_withExpyieldpoint3.spydata'
 test_size = 0.33
@@ -288,9 +288,9 @@ def normalizedata(df,test_size):
     features['LatticeConsts'] = np.array(features['LatticeConsts'])*1e-10 # change to unit m 
     grainsize = np.array(features['grainsize'])*1e-6 # change unit to m
     features['grainsize'] = grainsize
-    tau_list = pd.Series(np.array(target)*1e6/TaylorFactor)# change normal stress to shear stress
+    tau_list = pd.Series(np.array(target)*1e6/AveSchmidFactor)# change normal stress to shear stress
    
-    Yieldpoint = np.array(features['Yieldpoint'])*1e6/TaylorFactor # change normal stress to shear stress 
+    Yieldpoint = np.array(features['Yieldpoint'])*1e6/AveSchmidFactor # change normal stress to shear stress 
     features['Yieldpoint'] = Yieldpoint 
     
     

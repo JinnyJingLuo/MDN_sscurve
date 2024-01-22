@@ -257,7 +257,7 @@ def loadingdata(dataname):
     }) # assign the initial dataset without any processing 
     return df
 
-def normalizedata(df,test_size):
+def normalizedata(df):
     '''
     Parameters
     ----------
@@ -318,7 +318,6 @@ def normalizedata(df,test_size):
     # E_modulus = ShearModulus * 2*(1+features["PoissonRatios"])  # get Youngs Modulus 
     # eps_cr =  features['YE_observe'] #yield strain 
     # A_para= 1
-    # rho0 = rho_y 
     # density_increase = A_para*(eps_cr)/BurgersVector/grainsize
     # density0 = np.where( density_y -  density_increase > 0, density_y -  density_increase, density_y )
     # YP0 = density_to_stress(density0, alp, ShearModulus, BurgersVector, grainsize , bet)
@@ -351,15 +350,14 @@ def normalizedata(df,test_size):
     #-----------uncomment to plot the difference -----------#
     
     # drop some features we do not use/ but we can use latter 
-    drop_column = ['ShearModuluses','LatticeConsts','PoissonRatios','AtomicVolumes','StackingFaultEs','YE_observe']
+    # MDN is an  unsupervised learning method, so we do not have test set. 
+    drop_column = ['AtomicVolumes','StackingFaultEs','YE_observe','Material']
     features = features.drop(columns=drop_column, axis = 1)
-    # get onehotencode such for material type
-    features = pd.get_dummies(features, columns=['Material'])
+
     # split the training and test set by the percentage given 
-    X_train, X_test, density_train, density_test = train_test_split(features,density_train, test_size=test_size, random_state=2024)
-    # No test for MDN 
-    X_train = X_train.copy()
-    X_test = X_test.copy()# hard copy 
+    # X_train, X_test, density_train, density_test = train_test_split(features,density_train, test_size=test_size, random_state=2024)
+    X_train = features.copy()
+  
     
     # until now, we have the features: strain, strain rate, grain size, RESOLVED SHEAR STRESS AT YIELD, material type 
     # we also have the output : density
@@ -368,36 +366,48 @@ def normalizedata(df,test_size):
     transformer_strain = QuantileTransformer(output_distribution='uniform',n_quantiles=20)
     strain_quantile_transformed = transformer_strain.fit_transform(np.array(X_train['strains']).reshape(-1, 1))
     X_train['strains'] = strain_quantile_transformed 
-    X_test['strains'] = transformer_strain.transform(np.array(X_test['strains']).reshape(-1, 1)) 
+
 
     transformer_strainrate = QuantileTransformer(output_distribution='uniform',n_quantiles=20)
     strainrate_quantile_transformed = transformer_strainrate.fit_transform(np.array(X_train['strainrates']).reshape(-1, 1)) 
     X_train['strainrates'] = strainrate_quantile_transformed 
-    X_test['strainrates'] = transformer_strainrate.transform(np.array(X_test['strainrates']).reshape(-1, 1)) 
+
 
     transformer_gs = QuantileTransformer(output_distribution='uniform',n_quantiles=10)
     gs_quantile_transformed = transformer_gs.fit_transform(np.array(X_train['grainsize']).reshape(-1, 1))
     X_train.loc[:,'grainsize'] = gs_quantile_transformed 
-    X_test['grainsize'] = transformer_gs.transform(np.array(X_test['grainsize']).reshape(-1, 1)) 
+
     
     scaler_YP =  MinMaxScaler() #QuantileTransformer(output_distribution='normal',n_quantiles=n_quantiles)
     scaled_feature = scaler_YP.fit_transform(X_train[['Yieldpoint']])
     X_train['Yieldpoint'] = scaled_feature
-    X_test['Yieldpoint'] = scaler_YP.transform(X_test[['Yieldpoint']])
+
     
+    scaler_ShearModulus =  MinMaxScaler() #QuantileTransformer(output_distribution='normal',n_quantiles=n_quantiles)
+    scaled_feature = scaler_ShearModulus.fit_transform(X_train[['ShearModuluses']])
+    X_train['ShearModuluses'] = scaled_feature
+
+    
+    
+    scaler_LatticeConsts =  MinMaxScaler() #QuantileTransformer(output_distribution='normal',n_quantiles=n_quantiles)
+    scaled_feature = scaler_LatticeConsts.fit_transform(X_train[['LatticeConsts']])
+    X_train['LatticeConsts'] = scaled_feature
+ 
+    
+    scaler_PoissonRatios =  MinMaxScaler() #QuantileTransformer(output_distribution='normal',n_quantiles=n_quantiles)
+    scaled_feature = scaler_PoissonRatios.fit_transform(X_train[['PoissonRatios']])
+    X_train['PoissonRatios'] = scaled_feature
+
     
     data = np.array(density_train).reshape(-1, 1)
     data_log = np.log1p(data) 
     scaler_density = MinMaxScaler() #QuantileTransformer(output_distribution='normal',n_quantiles=n_quantiles)
     y_train = scaler_density.fit_transform(data_log)
     y_train = pd.DataFrame(y_train)    # change the data type to dataframe for output 
-    testdata_log = np.log1p((np.array(density_test).reshape(-1, 1)))
-    y_test = scaler_density.transform(testdata_log)
-    y_test = pd.DataFrame(y_test)  
-    
+
 
     
-    return X_train, X_test, y_train, y_test, transformer_strain, transformer_gs, transformer_strainrate,scaler_density, scaler_YP
+    return X_train, y_train,  transformer_strain, transformer_gs, transformer_strainrate,scaler_density, scaler_YP, scaler_ShearModulus, scaler_LatticeConsts, scaler_PoissonRatios 
 
     
 #%% ML part 
@@ -507,7 +517,7 @@ data = loadingdata(path)
 
 
 # get training set and test set separated 
-X_train, X_test, y_train, y_test, transformer_strain, transformer_gs, transformer_strainrate,  scaler_density,scaler_YP = normalizedata(data,test_size)
+X_train,  y_train,transformer_strain, transformer_gs, transformer_strainrate,  scaler_density,scaler_YP = normalizedata(data)
 X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=0.25, random_state=2025)
 
 n_hidden = 10
